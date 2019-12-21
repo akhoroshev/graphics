@@ -3,6 +3,7 @@ from collections import namedtuple
 from math import cos, pi
 from typing import List
 
+import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -11,7 +12,7 @@ from OpenGL.GLUT import *
 class ModelView:
     Point = namedtuple('Point', ['x', 'y'])
 
-    def __init__(self, vertices: List[float],
+    def __init__(self, vertices: List[float], vertex_format, vertex_size,
                  vertex_shader="shaders/vertex.vert",
                  fragment_shader="shaders/fragment.frag",
                  width=800,
@@ -24,6 +25,8 @@ class ModelView:
         glutCreateWindow(win_name)
         self.program = glCreateProgram()
         self.vertices = vertices
+        self.vertex_format = vertex_format
+        self.vertex_size = vertex_size
         self.fov = fov
         self.z_near = z_near
         self.z_far = z_far
@@ -41,8 +44,7 @@ class ModelView:
 
         glEnable(GL_DEPTH_TEST)
 
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 0, self.vertices)
+        glInterleavedArrays(eval('GL_' + self.vertex_format), 0, (GLfloat * len(self.vertices))(*self.vertices))
 
         glutDisplayFunc(self.__draw_event)
         glutReshapeFunc(self.__reshape_event)
@@ -64,11 +66,11 @@ class ModelView:
         glLoadIdentity()
         glViewport(0, 0, width, height)
         gluPerspective(self.fov, width / height, self.z_near, self.z_far)
-        gluLookAt(*(0.5, 0.5, 0.5), *(0, 0, 0), *(0, 1, 0))
+        gluLookAt(*(0, 0, 20), *(0, 0, 0), *(0, 1, 0))
 
     def __draw_event(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glDrawArrays(GL_TRIANGLES, 0, int(len(self.vertices) / 3))
+        glDrawArrays(GL_TRIANGLES, 0, int(len(self.vertices) / self.vertex_size))
         glutSwapBuffers()
 
     def __mouse_button_event(self, button, state, x, y):
@@ -93,7 +95,9 @@ class ModelView:
 
             glMatrixMode(GL_MODELVIEW)
             glRotate(0.2 * delta_x, *(0, 1, 0))
-            glRotate(0.2 * delta_y, *(1, 0, 0))
+
+            top_down_rotation = np.dot(glGetDoublev(GL_MODELVIEW_MATRIX), (1, 0, 0, 0))[:-1]
+            glRotate(0.2 * delta_y, *top_down_rotation)
             glutPostRedisplay()
 
             self.prev_mouse = ModelView.Point(x, y)
@@ -109,4 +113,3 @@ class ModelView:
 
         glUniform1f(glGetUniformLocation(self.program, "noise"), cos(progress))
         glutPostRedisplay()
-
