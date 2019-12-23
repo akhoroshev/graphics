@@ -1,4 +1,4 @@
-### 3d model
+### Decals
 
 ```shell script
 python3 -m venv venv
