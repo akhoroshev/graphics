@@ -13,7 +13,7 @@ uniform vec3 oy;
 
 void main() {
     eye = normalize(vec3(gl_ModelViewMatrix * gl_Vertex));
-    normal = normalize(gl_NormalMatrix * gl_Normal);
+    normal = gl_Normal;
     gl_Position = ftransform();
 
     float u = dot(normalize(ox), (gl_Vertex.xyz - pt)) / length(ox) + 0.5;

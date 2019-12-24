@@ -10,18 +10,20 @@ uniform sampler2D textureAlpha;
 
 
 void main() {
-    float light = dot(normal, eye);// (-1, 1)
-
-    vec4 finalColor = vec4(0.3, 0.4, 0.3, 0) + vec4(1, 0.9, 0.8, 0) * light;
+    vec3 finalNormal = normal;
+    vec4 finalColor = vec4(1, 0.9, 0.8, 0);
 
     if (tex.x >= 0 && tex.x <= 1 && tex.y >= 0 && tex.y <= 1 && tex.z >= 0 && tex.z <= 1) {
-        vec4 tmpColor = vec4(
+        vec3 tmpNormal = vec3(
         texture(textureNormals, vec2(tex.x, tex.y))[0],
         texture(textureNormals, vec2(tex.x, tex.y))[1],
-        texture(textureNormals, vec2(tex.x, tex.y))[2], 0);
+        texture(textureNormals, vec2(tex.x, tex.y))[2]);
         float scale = texture(textureAlpha, vec2(tex.x, tex.y))[3];
-        finalColor += tmpColor * scale;
+        finalNormal = finalNormal * (1 - scale) +  tmpNormal * scale;
     }
 
-    gl_FragColor = finalColor;
+    float light = dot(normalize(gl_NormalMatrix * finalNormal), eye);// (-1, 1)
+
+    gl_FragColor = vec4(0.2, 0.4, 0.3, 0) + finalColor * light;
+
 }
