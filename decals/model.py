@@ -3,11 +3,11 @@ from collections import namedtuple
 from math import pi
 from typing import List, Tuple
 
-import noise as noise
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+from PIL import Image
 
 Point2 = namedtuple('Point2', ['x', 'y'])
 Point3 = namedtuple('Point3', ['x', 'y', 'z'])
@@ -55,14 +55,15 @@ class ModelView:
                  vertex_shader="shaders/vertex.vert",
                  fragment_shader="shaders/fragment.frag",
                  width=800,
-                 height=800, fov=45,
+                 height=800, fov=70,
                  z_near=0.1, z_far=50,
                  win_name='HW3'):
         glutInit()
         glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
         glutInitWindowSize(width, height)
         glutCreateWindow(win_name)
-        self.tex_id = glGenTextures(1)
+        self.texture_normals = glGenTextures(1)
+        self.texture_alpha = glGenTextures(1)
         self.width = width
         self.height = height
         self.program = glCreateProgram()
@@ -80,13 +81,13 @@ class ModelView:
         self.cube = Cube((Point3(1, 0, 0), Point3(0, 1, 0), Point3(0, 0, 1)), Point3(-2.5, 8, 0), 1.5)
 
     def show(self):
-        self.__fill_texture()
-
         glAttachShader(self.program, self.vertex_shader)
         glAttachShader(self.program, self.fragment_shader)
 
         glLinkProgram(self.program)
         glUseProgram(self.program)
+
+        self.__fill_texture()
 
         glEnable(GL_DEPTH_TEST)
 
@@ -125,18 +126,31 @@ class ModelView:
         glutSwapBuffers()
 
     def __fill_texture(self):
-        size = 256
-        glBindTexture(GL_TEXTURE_2D, self.tex_id)
-        noise_texture = [
-            noise.pnoise2(1 / size * i, 1 / size * j, octaves=10, repeatx=1, repeaty=1)
-            for i in range(size) for j in range(size)
-        ]
-        base = min(noise_texture)
-        factor = max(noise_texture) - base
-        noise_texture = [(x - base) / factor for x in noise_texture]
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, size, size,
-                     0, GL_RED, GL_FLOAT, noise_texture)
-        glGenerateMipmap(GL_TEXTURE_2D)
+        def load_and_bind(name, id, format):
+            image = Image.open(name)
+            width = image.size[0]
+            height = image.size[1]
+            image = image.tobytes("raw", format, 0, -1)
+            glBindTexture(GL_TEXTURE_2D, id)
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+            gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, width, height, GL_RGBA, GL_UNSIGNED_BYTE, image)
+
+        texture_normals_location = glGetUniformLocation(self.program, "textureNormals")
+        texture_alpha_location = glGetUniformLocation(self.program, "textureAlpha")
+
+        glUseProgram(self.program)
+        glUniform1i(texture_normals_location, 0)
+        glUniform1i(texture_alpha_location, 1)
+
+        glActiveTexture(GL_TEXTURE0)
+        load_and_bind("models/decal-normal.jpg", self.texture_normals, "RGBX")
+
+        glActiveTexture(GL_TEXTURE1)
+        load_and_bind("models/decal-diffuse.png", self.texture_alpha, "RGBA")
 
     def __mouse_button_event(self, button, state, x, y):
         if state != GLUT_DOWN:
