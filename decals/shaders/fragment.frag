@@ -22,10 +22,10 @@ void main() {
     vec4 finalColor = vec4(1, 0.9, 0.8, 0);
 
     if (tex.x >= 0 && tex.x <= 1 && tex.y >= 0 && tex.y <= 1 && tex.z >= 0 && tex.z <= 1) {
-        vec3 tmpNormal = vec3(
+        vec3 tmpNormal = 2 * (vec3(
         texture(textureNormals, vec2(tex.x, tex.y))[0],
         texture(textureNormals, vec2(tex.x, tex.y))[1],
-        texture(textureNormals, vec2(tex.x, tex.y))[2]);
+        texture(textureNormals, vec2(tex.x, tex.y))[2]) - 0.5);
         float scale = texture(textureAlpha, vec2(tex.x, tex.y))[3];
         finalNormal = finalNormal * (1 - scale) +  normalRotation * tmpNormal * scale;
     }
