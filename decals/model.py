@@ -62,6 +62,9 @@ class ModelView:
         glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
         glutInitWindowSize(width, height)
         glutCreateWindow(win_name)
+        self.fbo = glGenFramebuffers(1)
+        self.fbo_normals = glGenTextures(1)
+        self.fbo_depth = glGenTextures(1)
         self.texture_normals = glGenTextures(1)
         self.texture_alpha = glGenTextures(1)
         self.width = width
@@ -118,12 +121,51 @@ class ModelView:
         gluPerspective(self.fov, width / height, self.z_near, self.z_far)
         gluLookAt(*(0, 0, 20), *(0, 0, 0), *(0, 1, 0))
 
+        self.__prepare_fbo()
+
     def __draw_event(self):
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glColor3f(0.5, 0.3, 0.1)
-        glDrawArrays(GL_TRIANGLES, 0, int(len(self.vertices) / self.vertex_size))
-        self.cube.draw()
+        def draw():
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            glColor3f(0.5, 0.3, 0.1)
+            glDrawArrays(GL_TRIANGLES, 0, int(len(self.vertices) / self.vertex_size))
+            self.cube.draw()
+
+        draw()
         glutSwapBuffers()
+
+        glUniform1i(glGetUniformLocation(self.program, "saveNormal"), 1)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glEnable(GL_DEPTH_TEST)
+        draw()
+        glFlush()
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glUniform1i(glGetUniformLocation(self.program, "saveNormal"), 0)
+
+    def __prepare_fbo(self):
+        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+
+        glActiveTexture(GL_TEXTURE2)
+        glBindTexture(GL_TEXTURE_2D, self.fbo_normals)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_FLOAT, None)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.fbo_normals, 0)
+
+        glActiveTexture(GL_TEXTURE3)
+        glBindTexture(GL_TEXTURE_2D, self.fbo_depth)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, self.width, self.height, 0, GL_DEPTH_STENCIL,
+                     GL_UNSIGNED_INT_24_8, None)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, self.fbo_depth, 0)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glBindTexture(GL_TEXTURE_2D, 0)
 
     def __fill_texture(self):
         def load_and_bind(name, id, format):
@@ -160,6 +202,25 @@ class ModelView:
             z = glReadPixels(x, self.height - y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT)
             pt = gluUnProject(x, self.height - y, z)
             self.cube.center = pt
+
+            # extract normal
+            glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+            normal = (2 * glReadPixels(x, self.height - y, 1, 1, GL_RGBA, GL_FLOAT) - 1)[0][0][:-1]
+            glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+            a = np.array(self.cube.basis[2], dtype=float)
+            b = np.array(normal, dtype=float)
+
+            a_m = a.reshape((-1, 1))
+            b_m = b.reshape((-1, 1))
+            ab = a_m + b_m
+            res = 2.0 * ab.dot(ab.T) / ab.T.dot(ab)[0][0] - np.eye(ab.shape[0])
+
+            self.cube.basis[0] = res.dot([1, 0, 0])
+            self.cube.basis[1] = res.dot([0, 1, 0])
+            self.cube.basis[2] = normal
+
+            glUniformMatrix3fv(glGetUniformLocation(self.program, "normalRotation"), 1, GL_FALSE, res)
             glUniform3f(glGetUniformLocation(self.program, "pt"), *self.cube.get_center())
             glUniform3f(glGetUniformLocation(self.program, "ox"), *self.cube.get_basis()[0])
             glUniform3f(glGetUniformLocation(self.program, "oy"), *self.cube.get_basis()[1])
