@@ -208,7 +208,7 @@ class ModelView:
             normal = (2 * glReadPixels(x, self.height - y, 1, 1, GL_RGBA, GL_FLOAT) - 1)[0][0][:-1]
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
-            a = np.array(self.cube.basis[2], dtype=float)
+            a = np.array([0, 0, 1], dtype=float)
             b = np.array(normal, dtype=float)
 
             a_m = a.reshape((-1, 1))
@@ -216,8 +216,8 @@ class ModelView:
             ab = a_m + b_m
             res = 2.0 * ab.dot(ab.T) / ab.T.dot(ab)[0][0] - np.eye(ab.shape[0])
 
-            self.cube.basis[0] = res.dot([1, 0, 0])
-            self.cube.basis[1] = res.dot([0, 1, 0])
+            self.cube.basis[0] = res.dot(np.array([1, 0, 0], dtype=float))
+            self.cube.basis[1] = res.dot(np.array([0, 1, 0], dtype=float))
             self.cube.basis[2] = normal
 
             glUniformMatrix3fv(glGetUniformLocation(self.program, "normalRotation"), 1, GL_FALSE, res)
